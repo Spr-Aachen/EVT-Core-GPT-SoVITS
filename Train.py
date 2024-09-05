@@ -14,8 +14,8 @@ import traceback
 from subprocess import Popen
 from pathlib import Path
 
-from .config import python_exec#, exp_root
-#from .GPT_SoVITS.tools.my_utils import load_audio, check_for_existance, check_details
+from config import python_exec#, exp_root
+#from GPT_SoVITS.tools.my_utils import load_audio, check_for_existance, check_details
 
 
 torch.manual_seed(233333)

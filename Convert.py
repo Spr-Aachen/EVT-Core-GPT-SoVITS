@@ -2,8 +2,6 @@ import os,sys
 if len(sys.argv)==1:sys.argv.append('v2')
 version="v1"if sys.argv[1]=="v1" else"v2"
 os.environ["version"]=version
-now_dir = os.getcwd()
-#sys.path.insert(0, now_dir)
 import warnings
 warnings.filterwarnings("ignore")
 import torch
@@ -11,10 +9,14 @@ import platform
 import psutil
 import signal
 import subprocess
-from pathlib import Path
 from scipy.io.wavfile import write
 
-from .config import python_exec, webui_port_infer_tts, is_share
+from pathlib import Path
+current_dir = Path(__file__).absolute().parent.as_posix()
+sys.path.insert(0, f"{current_dir}")
+os.chdir(current_dir)
+
+from config import python_exec, webui_port_infer_tts, is_share
 
 
 current_dir = Path(__file__).absolute().parent.as_posix()
@@ -139,10 +141,6 @@ def change_tts_inference(
     use_webui
 ):
     global p_tts_inference
-    if use_webui:
-        cmd = '"%s" GPT_SoVITS/inference_webui_fast.py'%(python_exec) if batched_infer_enabled else '"%s" GPT_SoVITS/inference_webui.py'%(python_exec)
-    else:
-        cmd = f'"{python_exec}" "GPT_SoVITS/inference_gui.py"'
     if(if_tts==True and p_tts_inference==None):
         os.environ["gpt_path"]=gpt_path #if "/" in gpt_path else "%s/%s"%(GPT_weight_root,gpt_path)
         os.environ["sovits_path"]=sovits_path #if "/"in sovits_path else "%s/%s"%(SoVITS_weight_root,sovits_path)
@@ -153,7 +151,11 @@ def change_tts_inference(
         os.environ["infer_ttswebui"]=str(webui_port_infer_tts)
         os.environ["is_share"]=str(is_share)
         print("TTS推理进程已开启")
-        print(cmd)
+        if use_webui:
+            cmd = '"%s" GPT_SoVITS/inference_webui_fast.py'%(python_exec) if batched_infer_enabled else '"%s" GPT_SoVITS/inference_webui.py'%(python_exec)
+        else:
+            cmd = f'"{python_exec}" "GPT_SoVITS/inference_gui.py"'
+        #print('webui_port:', webui_port_infer_tts)
         p_tts_inference = subprocess.Popen(cmd, shell=True)
         p_tts_inference.wait()
     elif(if_tts==False and p_tts_inference!=None):

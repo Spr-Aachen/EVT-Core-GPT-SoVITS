@@ -1,16 +1,20 @@
 import os, sys, shutil
 from typing import Union, Optional
 from glob import glob
-from pathlib import Path
 
-from .Dataset_Creator.Creating_Directories import create_directories
-from .Dataset_Creator.Convert_SRT_to_CSV import change_encoding, convert_srt_to_csv
-from .Dataset_Creator.Split_Audio import split_files
-from .Dataset_Creator.Create_DS_CSV import create_DS_csv
-from .Dataset_Creator.Merge_CSV import merge_csv
-from .Dataset_Creator.Merge_Transcripts_and_Files import merge_transcripts_and_wav_files
-from .Dataset_Creator.Clean import clean_unwanted_characters
-from .Dataset_Creator.Create_Dataset_Loading_Script import Transcript_Writer
+from pathlib import Path
+current_dir = Path(__file__).absolute().parent.as_posix()
+sys.path.insert(0, f"{current_dir}")
+os.chdir(current_dir)
+
+from Dataset_Creator.Creating_Directories import create_directories
+from Dataset_Creator.Convert_SRT_to_CSV import change_encoding, convert_srt_to_csv
+from Dataset_Creator.Split_Audio import split_files
+from Dataset_Creator.Create_DS_CSV import create_DS_csv
+from Dataset_Creator.Merge_CSV import merge_csv
+from Dataset_Creator.Merge_Transcripts_and_Files import merge_transcripts_and_wav_files
+from Dataset_Creator.Clean import clean_unwanted_characters
+from Dataset_Creator.Create_Dataset_Loading_Script import Transcript_Writer
 
 
 class Dataset_Creating:
