@@ -169,18 +169,7 @@ def Convert(
     Model_Path_Load_s2G: str = "GPT_SoVITS/pretrained_models/s2G488k.pth",
     Model_Dir_Load_bert: str = "GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large",
     Model_Dir_Load_ssl: str = "GPT_SoVITS/pretrained_models/chinese-hubert-base",
-    Ref_Audio: str = "",
-    Ref_Text_Free: bool = False,
-    Ref_Text: str = "",
-    Ref_Language: str = "多语种混合",
-    Text: str = '请输入语句',
-    Language: str = "多语种混合",
-    How_To_Cut: str = "按标点符号切",
-    Top_K: int = 5,
-    Top_P: float = 1.,
-    Temperature: float = 1.,
     Set_FP16_Run: bool = False,
-    Audio_Path_Save: str = ...,
     Enable_Batched_Infer: bool = False,
     Use_WebUI: bool = False
 ):
