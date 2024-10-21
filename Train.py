@@ -12,7 +12,11 @@ import psutil
 import signal
 import traceback
 from subprocess import Popen
+
 from pathlib import Path
+current_dir = Path(__file__).absolute().parent.as_posix()
+sys.path.insert(0, f"{current_dir}")
+os.chdir(current_dir)
 
 from config import python_exec#, exp_root
 #from GPT_SoVITS.tools.my_utils import load_audio, check_for_existance, check_details
