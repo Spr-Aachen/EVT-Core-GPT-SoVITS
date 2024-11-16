@@ -1,7 +1,7 @@
 import os,sys
-if len(sys.argv)==1:sys.argv.append('v2')
-version="v1"if sys.argv[1]=="v1" else"v2"
-os.environ["version"]=version
+# if len(sys.argv)==1:sys.argv.append('v2')
+# version="v1"if sys.argv[1]=="v1" else"v2"
+# os.environ["version"]=version
 now_dir = os.getcwd()
 #sys.path.insert(0, now_dir)
 import warnings
@@ -270,7 +270,8 @@ def open1Ba(
     save_every_epoch,
     gpu_numbers1Ba,
     pretrained_s2G,
-    pretrained_s2D
+    pretrained_s2D,
+    version
 ):
     global p_train_SoVITS
     if(p_train_SoVITS==None):
@@ -291,9 +292,11 @@ def open1Ba(
         data["train"]["if_save_every_weights"]=if_save_every_weights
         data["train"]["save_every_epoch"]=save_every_epoch
         data["train"]["gpu_numbers"]=gpu_numbers1Ba
+        data["model"]["version"]=version
         data["data"]["exp_dir"]=data["s2_ckpt_dir"]=s2_dir
         data["save_weight_dir"]=exp_dir_weight
         data["name"]=exp_name
+        data["version"]=version
         tmp_config_path="%s/tmp_s2.json"%tmp
         with open(tmp_config_path,"w")as f:f.write(json.dumps(data))
 
@@ -321,11 +324,12 @@ def open1Bb(
     if_save_every_weights,
     save_every_epoch,
     gpu_numbers,
-    pretrained_s1
+    pretrained_s1,
+    version
 ):
     global p_train_GPT
     if(p_train_GPT==None):
-        with open(f"GPT_SoVITS/configs/s1longer.yaml")as f:
+        with open("GPT_SoVITS/configs/s1longer.yaml"if version=="v1"else "GPT_SoVITS/configs/s1longer-v2.yaml")as f:
             data=f.read()
             data=yaml.load(data, Loader=yaml.FullLoader)
         s1_dir="%s/%s"%(exp_root,exp_name)
@@ -345,6 +349,7 @@ def open1Bb(
         data["train_semantic_path"]="%s/6-name2semantic.tsv"%s1_dir
         data["train_phoneme_path"]="%s/2-name2text.txt"%s1_dir
         data["output_dir"]="%s/logs_s1"%s1_dir
+        # data["version"]=version
 
         os.environ["_CUDA_VISIBLE_DEVICES"]=fix_gpu_numbers(gpu_numbers.replace("-",","))
         os.environ["hz"]="25hz"
@@ -378,7 +383,8 @@ def Train(
     Model_Path_Pretrained_s2D: str = "GPT_SoVITS/pretrained_models/s2D488k.pth",
     Output_Root: str = "SoVITS_weights&GPT_weights",
     Output_DirName: str = "模型名",
-    Output_LogDir: str = "logs"
+    Output_LogDir: str = "logs",
+    version: str = "v2"
 ):
     os.makedirs(Output_Root, exist_ok = True)
     # To absolut audio path & get audio dir
@@ -423,7 +429,8 @@ def Train(
         save_every_epoch = 4,
         gpu_numbers1Ba = "%s" % (gpus),
         pretrained_s2G = Model_Path_Pretrained_s2G,
-        pretrained_s2D = Model_Path_Pretrained_s2D
+        pretrained_s2D = Model_Path_Pretrained_s2D,
+        version = version
     )
     # 1B-GPT训练
     open1Bb(
@@ -438,5 +445,6 @@ def Train(
         if_save_every_weights = True,
         save_every_epoch = 5,
         gpu_numbers = "%s" % (gpus),
-        pretrained_s1 = Model_Path_Pretrained_s1
+        pretrained_s1 = Model_Path_Pretrained_s1,
+        version = version
     )
