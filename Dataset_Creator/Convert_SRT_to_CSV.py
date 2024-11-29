@@ -1,8 +1,8 @@
-import pandas as pd
-import os
 import io
 import re
-import numpy as np
+import numpy
+import pandas
+from pathlib import Path
 
 
 def change_encoding(SRT_Path):
@@ -44,22 +44,15 @@ def convert_srt_to_csv(
     Lines = Lines[1:] # all text in lists
 
     Column_Names = ['id', 'start_times', 'end_times', 'transcript']
-    DF_Text = pd.DataFrame(columns = Column_Names)
+    DF_Text = pandas.DataFrame(columns = Column_Names)
 
     DF_Text['start_times'] = Start_Times
     DF_Text['end_times'] = End_Times
     DF_Text['transcript'] = [" ".join(i).strip() for i in Lines]
 
-    DF_Text['id'] = np.arange(len(DF_Text))
-    ID_Extension = os.path.basename(SRT_Path).replace('.srt', '_')
-    '''
-    ID_Extension = ID_Extension.replace(' ', '_')
-    ID_Extension = ID_Extension.replace('-', '_')
-    ID_Extension = ID_Extension.replace('.', '_')
-    ID_Extension = ID_Extension.replace('__', '_')
-    ID_Extension = ID_Extension.replace('___', '_')
-    '''
-    DF_Text['id'] = ID_Extension + DF_Text['id'].astype(str)
+    DF_Text['id'] = numpy.arange(len(DF_Text))
+    ID_Extension = Path(SRT_Path).name.replace('.srt', '_')
+    DF_Text['id'] = DF_Text['id'].apply(lambda x: f"{ID_Extension}{x}")
 
     file_extension = ID_Extension[:-1]
 
@@ -81,4 +74,4 @@ def convert_srt_to_csv(
 
     DF_Text['end_times'] = DF_Text['end_times'].apply(convert_to_ms)
 
-    DF_Text.to_csv(os.path.join(CSV_Dir, (file_extension + '.csv')), index = False, header = True, encoding = 'utf-8-sig')
+    DF_Text.to_csv(Path(CSV_Dir).joinpath(file_extension + '.csv').as_posix(), index = False, header = True, encoding = 'utf-8-sig')
