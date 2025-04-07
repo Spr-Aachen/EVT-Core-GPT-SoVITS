@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
 import sys,os
-now_dir = os.getcwd()
-sys.path.append(now_dir)
 inp_text=                           os.environ.get("inp_text")
 inp_wav_dir=                        os.environ.get("inp_wav_dir")
 exp_name=                           os.environ.get("exp_name")
@@ -10,19 +8,30 @@ i_part=                             os.environ.get("i_part")
 all_parts=                          os.environ.get("all_parts")
 if "_CUDA_VISIBLE_DEVICES" in os.environ:
      os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["_CUDA_VISIBLE_DEVICES"]
+from feature_extractor import cnhubert
 opt_dir=                            os.environ.get("opt_dir")
-from GPT_SoVITS.feature_extractor import cnhubert
 cnhubert.cnhubert_base_path=        os.environ.get("cnhubert_base_dir")
 import torch
 is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
-import traceback, numpy as np
-import shutil
-import librosa
+import pdb,traceback,numpy as np,logging
 from scipy.io import wavfile
+import librosa
 from time import time as ttime
-
+import shutil
+now_dir = os.getcwd()
+sys.path.append(now_dir)
 from tools.my_utils import load_audio,clean_path
 
+# from config import cnhubert_base_path
+# cnhubert.cnhubert_base_path=cnhubert_base_path
+# inp_text=sys.argv[1]
+# inp_wav_dir=sys.argv[2]
+# exp_name=sys.argv[3]
+# i_part=sys.argv[4]
+# all_parts=sys.argv[5]
+# os.environ["CUDA_VISIBLE_DEVICES"]=sys.argv[6]
+# cnhubert.cnhubert_base_path=sys.argv[7]
+# opt_dir="/data/docker/liujing04/gpt-vits/fine_tune_dataset/%s"%exp_name
 
 def my_save(fea,path):#####fix issue: torch.save doesn't support chinese path
     dir=os.path.dirname(path)

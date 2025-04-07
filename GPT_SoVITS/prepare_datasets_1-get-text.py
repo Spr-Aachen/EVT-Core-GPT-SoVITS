@@ -73,7 +73,7 @@ if os.path.exists(txt_path) == False:
             try:
                 name=clean_path(name)
                 name = os.path.basename(name)
-                print(name) # print(text)
+                print(name)
                 phones, word2ph, norm_text = clean_text(
                     text.replace("%", "-").replace("￥", ","), lan, version
                 )

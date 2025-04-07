@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
-now_dir = os.getcwd()
-sys.path.append(now_dir)
+
 inp_text = os.environ.get("inp_text")
 exp_name = os.environ.get("exp_name")
 i_part = os.environ.get("i_part")
@@ -13,18 +11,42 @@ if "_CUDA_VISIBLE_DEVICES" in os.environ:
 opt_dir = os.environ.get("opt_dir")
 pretrained_s2G = os.environ.get("pretrained_s2G")
 s2config_path = os.environ.get("s2config_path")
-version=os.environ.get("version","v2")
-import torch
-is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
-import traceback
-import logging, utils
-from module.models import SynthesizerTrn
-from tools.my_utils import clean_path
-logging.getLogger("numba").setLevel(logging.WARNING)
-
 
 if os.path.exists(pretrained_s2G):...
 else:raise FileNotFoundError(pretrained_s2G)
+# version=os.environ.get("version","v2")
+size = os.path.getsize(pretrained_s2G)
+if size < 82978 * 1024:
+    version = "v1"
+elif size < 100 * 1024 * 1024:
+    version = "v2"
+elif size < 103520 * 1024:
+    version = "v1"
+elif size < 700 * 1024 * 1024:
+    version = "v2"
+else:
+    version = "v3"
+import torch
+is_half = eval(os.environ.get("is_half", "True")) and torch.cuda.is_available()
+import traceback
+import sys
+now_dir = os.getcwd()
+sys.path.append(now_dir)
+import logging, utils
+if version!="v3":
+    from module.models import SynthesizerTrn
+else:
+    from module.models import SynthesizerTrnV3 as SynthesizerTrn
+from tools.my_utils import clean_path
+logging.getLogger("numba").setLevel(logging.WARNING)
+
+# inp_text=sys.argv[1]
+# exp_name=sys.argv[2]
+# i_part=sys.argv[3]
+# all_parts=sys.argv[4]
+# os.environ["CUDA_VISIBLE_DEVICES"]=sys.argv[5]
+# opt_dir="/data/docker/liujing04/gpt-vits/fine_tune_dataset/%s"%exp_name
+
 
 hubert_dir = "%s/4-cnhubert" % (opt_dir)
 semantic_path = "%s/6-name2semantic-%s.tsv" % (opt_dir, i_part)
@@ -54,7 +76,7 @@ if os.path.exists(semantic_path) == False:
     # utils.load_checkpoint(pretrained_s2G, vq_model, None, True)
     print(
         vq_model.load_state_dict(
-            torch.load(pretrained_s2G, map_location="cpu")["weight"], strict=False
+            torch.load(pretrained_s2G, map_location="cpu", weights_only=False)["weight"], strict=False
         )
     )
 
