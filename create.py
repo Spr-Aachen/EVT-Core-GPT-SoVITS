@@ -70,7 +70,7 @@ class Dataset_Creating:
         self.DataFormat = DataFormat.replace('路径', 'PATH').replace('人名', 'NAME').replace('语言', 'LANG').replace('文本', 'TEXT')
         self.FileList_Path = Path(self.WAV_Dir_Split).joinpath(FileList_Name).as_posix() + ".txt"
 
-    def CallingFunctions(self):
+    def run(self):
         SRT_Counter = len(glob(os.path.join(self.SRT_Dir, '*.srt')))
 
         if SRT_Counter == 0:

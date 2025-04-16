@@ -939,7 +939,7 @@ default_cut_punc = args.cut_punc
 cnhubert_base_path = args.hubert_path
 bert_path = args.bert_path
 
-def initialize(p_sovitsPath, p_path_sovits_v3, p_gptPath, p_defaultReferPath, p_defaultReferText, p_defaultReferLanguage, p_device, p_halfPrecision, p_streamMode, p_mediaType, p_subType, p_cnhubertBasePath, p_bertPath, p_bigvganPath):
+def initialize(p_sovitsPath, p_sovitsV3Path, p_gptPath, p_defaultReferPath, p_defaultReferText, p_defaultReferLanguage, p_device, p_halfPrecision, p_streamMode, p_mediaType, p_subType, p_cnhubertBasePath, p_bertPath, p_bigvganPath):
     global sovits_path
     global path_sovits_v3
     global gpt_path
@@ -958,7 +958,7 @@ def initialize(p_sovitsPath, p_path_sovits_v3, p_gptPath, p_defaultReferPath, p_
     global bigvgan_path
 
     sovits_path = p_sovitsPath
-    path_sovits_v3 = p_path_sovits_v3
+    path_sovits_v3 = p_sovitsV3Path
     gpt_path = p_gptPath
     default_refer_path = p_defaultReferPath
     default_refer_text = p_defaultReferText
@@ -1052,7 +1052,7 @@ def initialize(p_sovitsPath, p_path_sovits_v3, p_gptPath, p_defaultReferPath, p_
 isInitialized = False
 async def convert(
     sovits_path: str = ...,
-    path_sovits_v3: str = ...,
+    sovits_v3_path: str = ...,
     gpt_path: str = ...,
     cnhubert_base_path: str = ...,
     bert_path: str = ...,
@@ -1080,7 +1080,7 @@ async def convert(
     global isInitialized
     # 1C-推理
     if not isInitialized:
-        initialize(sovits_path, path_sovits_v3, gpt_path, refer_wav_path, prompt_text, prompt_language, device, half_precision, stream_mode, media_type, sub_type, cnhubert_base_path, bert_path, bigvgan_path)
+        initialize(sovits_path, sovits_v3_path, gpt_path, refer_wav_path, prompt_text, prompt_language, device, half_precision, stream_mode, media_type, sub_type, cnhubert_base_path, bert_path, bigvgan_path)
         isInitialized = True
     body_iterator = handle(refer_wav_path, prompt_text, prompt_language, text, text_language, cut_punc, top_k, top_p, temperature, speed, inp_refs, sample_steps, if_sr).body_iterator
     with open(output_path, 'wb') as f:

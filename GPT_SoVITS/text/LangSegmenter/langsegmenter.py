@@ -2,7 +2,7 @@ import logging
 import re
 
 # jieba静音
-import jieba
+import jieba_fast as jieba # Edit: replace 'jieba' with 'jieba_fast as jieba'
 
 jieba.setLogLevel(logging.CRITICAL)
 

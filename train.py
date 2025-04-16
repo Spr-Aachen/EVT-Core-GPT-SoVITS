@@ -650,6 +650,7 @@ def train(
     assert Path(Line_Path).exists(), "请检查数据集是否为相对路径格式且音频在同一目录下"
     AudioDir = Path(Line_Path).parent.as_posix()
     # 
+    os.environ["version"] = version
     set_default(version)
     # 1A-训练集格式化
     open1abc(
