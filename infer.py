@@ -1050,7 +1050,7 @@ def initialize(p_sovitsPath, p_sovitsV3Path, p_gptPath, p_defaultReferPath, p_de
 
 
 isInitialized = False
-async def convert(
+async def infer(
     sovits_path: str = ...,
     sovits_v3_path: str = ...,
     gpt_path: str = ...,
@@ -1093,7 +1093,7 @@ async def convert(
 if __name__ == '__main__':
     import asyncio
     asyncio.run(
-        convert(
+        infer(
             'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/s1&s2/s2Gv3.pth',
             'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/s1&s2/s2Gv3.pth',
             'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/s1&s2/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt',

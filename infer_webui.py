@@ -330,7 +330,7 @@ def change_tts_inference(
         print("TTS推理进程已关闭")
 
 
-def convert(
+def infer(
     version: str = "v3",
     sovits_path: str = ...,
     sovits_v3_path: str = ...,
