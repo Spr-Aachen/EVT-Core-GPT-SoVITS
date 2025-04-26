@@ -14,7 +14,7 @@ from Dataset_Creator.createDatasetCSV import create_DS_csv
 from Dataset_Creator.mergeCSV import merge_csv
 from Dataset_Creator.mergeTranscriptsAndFiles import merge_transcripts_and_wav_files
 from Dataset_Creator.clean import clean_unwanted_characters
-from Dataset_Creator.createDatasetLoadingScript import Transcript_Writer
+from Dataset_Creator.createDatasetLoadingScript import writeTranscript
 
 
 class Dataset_Creating:
@@ -24,41 +24,39 @@ class Dataset_Creating:
     3. Split and downsample WAV
     '''
     def __init__(self,
-        SRT_Dir: str,
-        AudioSpeakersData_Path: str,
-        #WAV_Time_Limitation: float = 10.00,
-        DataFormat: str = 'PATH|NAME|LANG|TEXT',
-        #Add_AuxiliaryData: bool = False,
-        #AuxiliaryData_Path: str = './AuxiliaryData/AuxiliaryData.txt',
-        Output_Root: str = "./",
-        Output_DirName: str = "",
-        FileList_Name: str = 'FileList'
+        srtDir: str,
+        audioSpeakersDataPath: str,
+        #timeLimitation: float = 10.00,
+        dataFormat: str = 'PATH|NAME|LANG|TEXT',
+        outputRoot: str = "./",
+        outputDirName: str = "",
+        fileListName: str = 'FileList'
     ):
-        self.SRT_Dir = SRT_Dir
+        self.srtDir = srtDir
         def Get_WAV_Paths_Input():
             WAV_Paths_Input = []
-            if Path(AudioSpeakersData_Path).is_dir():
-                for SubPath in glob(Path(AudioSpeakersData_Path).joinpath('**', '*.wav').__str__(), recursive = True):
+            if Path(audioSpeakersDataPath).is_dir():
+                for SubPath in glob(Path(audioSpeakersDataPath).joinpath('**', '*.wav').__str__(), recursive = True):
                     Audio = Path(SubPath).as_posix()
                     WAV_Paths_Input.append(Audio)
-            if Path(AudioSpeakersData_Path).is_file():
-                with open(file = AudioSpeakersData_Path, mode = 'r', encoding = 'utf-8') as AudioSpeakersData:
+            if Path(audioSpeakersDataPath).is_file():
+                with open(file = audioSpeakersDataPath, mode = 'r', encoding = 'utf-8') as AudioSpeakersData:
                     AudioSpeakerLines = AudioSpeakersData.readlines()
                 for AudioSpeakerLine in AudioSpeakerLines:
                     Audio = AudioSpeakerLine.split('|')[0]
                     WAV_Paths_Input.append(Audio)
             return WAV_Paths_Input
         self.WAV_Paths_Input = Get_WAV_Paths_Input()
-        self.WAV_Dir_Split = Path(Output_Root).joinpath(Output_DirName).as_posix()
+        self.WAV_Dir_Split = Path(outputRoot).joinpath(outputDirName).as_posix()
         def Get_AudioSpeakers():
             AudioSpeakers = {}
-            if Path(AudioSpeakersData_Path).is_dir():
-                for SubPath in glob(Path(AudioSpeakersData_Path).joinpath('**', '*.wav').__str__(), recursive = True):
+            if Path(audioSpeakersDataPath).is_dir():
+                for SubPath in glob(Path(audioSpeakersDataPath).joinpath('**', '*.wav').__str__(), recursive = True):
                     Audio = Path(self.WAV_Dir_Split).joinpath(Path(SubPath).name).as_posix()
                     Speaker = Path(SubPath).parent.name
                     AudioSpeakers[Audio] = Speaker
-            if Path(AudioSpeakersData_Path).is_file():
-                with open(file = AudioSpeakersData_Path, mode = 'r', encoding = 'utf-8') as AudioSpeakersData:
+            if Path(audioSpeakersDataPath).is_file():
+                with open(file = audioSpeakersDataPath, mode = 'r', encoding = 'utf-8') as AudioSpeakersData:
                     AudioSpeakerLines = AudioSpeakersData.readlines()
                 for AudioSpeakerLine in AudioSpeakerLines:
                     Audio = Path(self.WAV_Dir_Split).joinpath(Path(AudioSpeakerLine.split('|')[0]).name).as_posix()
@@ -66,15 +64,15 @@ class Dataset_Creating:
                     AudioSpeakers[Audio] = Speaker
             return AudioSpeakers
         self.AudioSpeakers = Get_AudioSpeakers()
-        #self.WAV_Time_Limitation = WAV_Time_Limitation
-        self.DataFormat = DataFormat.replace('路径', 'PATH').replace('人名', 'NAME').replace('语言', 'LANG').replace('文本', 'TEXT')
-        self.FileList_Path = Path(self.WAV_Dir_Split).joinpath(FileList_Name).as_posix() + ".txt"
+        #self.timeLimitation = timeLimitation
+        self.dataFormat = dataFormat.replace('路径', 'PATH').replace('人名', 'NAME').replace('语言', 'LANG').replace('文本', 'TEXT')
+        self.FileList_Path = Path(self.WAV_Dir_Split).joinpath(fileListName).as_posix() + ".txt"
 
     def run(self):
-        SRT_Counter = len(glob(os.path.join(self.SRT_Dir, '*.srt')))
+        SRT_Counter = len(glob(os.path.join(self.srtDir, '*.srt')))
 
         if SRT_Counter == 0:
-            print('!!! Please add srt_file(s) to %s-folder' %self.SRT_Dir)
+            print('!!! Please add srt_file(s) to %s-folder' %self.srtDir)
             sys.exit()
 
         # Create directories
@@ -85,14 +83,14 @@ class Dataset_Creating:
 
         # Changing encoding from utf-8 to utf-8-sig
         print('Encoding srt_file(s) to utf-8...')
-        for SRT in glob(os.path.join(self.SRT_Dir, '*.srt')):
+        for SRT in glob(os.path.join(self.srtDir, '*.srt')):
             change_encoding(SRT)
         print('Encoding of %s-file(s) changed' %SRT_Counter)
         print('---------------------------------------------------------------------')
 
         # Extracting information from srt-files to csv
         print('Extracting information from srt_file(s) to csv_files')
-        for File in glob(os.path.join(self.SRT_Dir, '*.srt')):
+        for File in glob(os.path.join(self.srtDir, '*.srt')):
             convert_srt_to_csv(File, CSV_Dir_Prepared)
         print('%s-file(s) converted and saved as csv-files to ./csv' %SRT_Counter)
         print('---------------------------------------------------------------------')
@@ -126,7 +124,7 @@ class Dataset_Creating:
         print('---------------------------------------------------------------------')
 
         # Write transcript to text-file for model training
-        Transcript_Writer(self.AudioSpeakers, self.DataFormat, CSV_Path_Final_Cleaned, self.WAV_Dir_Split, self.FileList_Path)
+        writeTranscript(self.AudioSpeakers, self.dataFormat, CSV_Path_Final_Cleaned, self.WAV_Dir_Split, self.FileList_Path)
         print('Transcript written.')
         print('---------------------------------------------------------------------')
 

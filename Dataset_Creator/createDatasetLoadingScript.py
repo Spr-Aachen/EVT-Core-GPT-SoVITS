@@ -9,7 +9,7 @@ from pathlib import Path
 ToStandaloneForm = True
 
 
-def Transcript_Writer(
+def writeTranscript(
     AudioSpeakers,
     DataFormat,
     CSV_Path,
@@ -38,7 +38,7 @@ def Transcript_Writer(
         Line_Lang = re.split(r'[\[\]]', Line_LanguageText)[1]
         LangList.append(Line_Lang) if Line_Lang not in LangList else None
 
-    def UpdateDataLines(DataLines, Text_Path):
+    def _updateDataLines(DataLines, Text_Path):
         for Index, Line in enumerate(DataLines):
             Line_Path = Line.split('|', maxsplit = 1)[0]
             Audio = Path(Line_Path.rsplit('_', maxsplit = 1)[0] + Path(Line_Path).suffix).as_posix()
@@ -57,7 +57,7 @@ def Transcript_Writer(
         return DataLines
 
     '''
-    def UpdateAuxiliaryDataLines(AuxiliaryDataLines, Text_Path):
+    def _updateAuxiliaryDataLines(AuxiliaryDataLines, Text_Path):
         print("Writing AuxiliaryData paths...")
         AuxiliaryDataLines_New = []
         for AuxiliaryDataLine in AuxiliaryDataLines:
@@ -81,13 +81,13 @@ def Transcript_Writer(
     '''
 
     random.shuffle(DataLines)
-    DataLines = UpdateDataLines(DataLines, Text_Path)
+    DataLines = _updateDataLines(DataLines, Text_Path)
     '''
     if AuxiliaryData_Path is not None:
         with open(file = AuxiliaryData_Path, mode = 'r', encoding = 'utf-8') as AuxiliaryData:
             AuxiliaryDataLines = AuxiliaryData.readlines()
         random.shuffle(AuxiliaryDataLines)
-        AuxiliaryDataLines = UpdateAuxiliaryDataLines(AuxiliaryDataLines, Text_Path)
+        AuxiliaryDataLines = _updateAuxiliaryDataLines(AuxiliaryDataLines, Text_Path)
         ReplicateTimes = len(AuxiliaryDataLines) // len(DataLines) if len(AuxiliaryDataLines) > len(DataLines) else 1
         DataLines = DataLines * ReplicateTimes + AuxiliaryDataLines
     '''
@@ -95,8 +95,8 @@ def Transcript_Writer(
     random.shuffle(DataLines)
 
     print("Writing VITS dataset paths...")
-    def WriteDataLines(Text_Path, Lines):
+    def _writeDataLines(Text_Path, Lines):
         os.makedirs(os.path.dirname(Text_Path), exist_ok = True)
         with open(file = Text_Path, mode = 'w', encoding = 'utf-8') as File_New:
             File_New.writelines(Lines)
-    WriteDataLines(Text_Path, DataLines)
+    _writeDataLines(Text_Path, DataLines)
