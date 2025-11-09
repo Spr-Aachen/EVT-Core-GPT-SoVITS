@@ -4,24 +4,17 @@ Altered from webui.py
 
 import os
 import sys
-
-# if len(sys.argv) == 1:
-#     sys.argv.append("v2")
-# version = "v1" if sys.argv[1] == "v1" else "v2"
-# os.environ["version"] = version
-
+#os.environ["version"] = version = "v2Pro"
 from pathlib import Path
 now_dir = Path(__file__).absolute().parent.as_posix()
 gptsovits_dir = Path(now_dir).joinpath("GPT_SoVITS").as_posix()
 sys.path.insert(0, f"{gptsovits_dir}")
 sys.path.insert(1, f"{now_dir}")
 os.chdir(now_dir)
-
 import warnings
 warnings.filterwarnings("ignore")
 import json
 import platform
-import re
 import shutil
 import signal
 import psutil
@@ -43,75 +36,66 @@ if os.path.exists(tmp):
         except Exception as e:
             print(str(e))
             pass
+import site
 import traceback
+site_packages_roots = []
+for path in site.getsitepackages():
+    if "packages" in path:
+        site_packages_roots.append(path)
+if site_packages_roots == []:
+    site_packages_roots = ["%s/runtime/Lib/site-packages" % now_dir]
+# os.environ["OPENBLAS_NUM_THREADS"] = "4"
+os.environ["no_proxy"] = "localhost, 127.0.0.1, ::1"
+os.environ["all_proxy"] = ""
+for site_packages_root in site_packages_roots:
+    if os.path.exists(site_packages_root):
+        try:
+            with open("%s/users.pth" % (site_packages_root), "w") as f:
+                f.write(
+                    # "%s\n%s/runtime\n%s/tools\n%s/tools/asr\n%s/GPT_SoVITS\n%s/tools/uvr5"
+                    "%s\n%s/GPT_SoVITS/BigVGAN\n%s/tools\n%s/tools/asr\n%s/GPT_SoVITS\n%s/tools/uvr5"
+                    % (now_dir, now_dir, now_dir, now_dir, now_dir, now_dir)
+                )
+            break
+        except PermissionError:
+            traceback.print_exc()
+import shutil
 import subprocess
 from subprocess import Popen
-from config import (
-    exp_root,
-    infer_device,
-    is_half,
-    is_share,
-    python_exec,
-)
-#from GPT_SoVITS.tools import my_utils
+
 from GPT_SoVITS.tools.i18n.i18n import I18nAuto, scan_language_list
 language = sys.argv[-1] if sys.argv[-1] in scan_language_list() else "Auto"
 os.environ["language"] = language
 i18n = I18nAuto(language=language)
 from multiprocessing import cpu_count
 
+from config import (
+    GPU_INDEX,
+    GPU_INFOS,
+    IS_GPU,
+    exp_root,
+    infer_device,
+    is_half,
+    is_share,
+    memset,
+    python_exec,
+    webui_port_infer_tts,
+    webui_port_main,
+    webui_port_subfix,
+    webui_port_uvr5,
+)
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 n_cpu = cpu_count()
 
-ngpu = torch.cuda.device_count()
-gpu_infos = []
-mem = []
-if_gpu_ok = False
+set_gpu_numbers = GPU_INDEX
+gpu_infos = GPU_INFOS
+mem = memset
+is_gpu_ok = IS_GPU
 
-# 判断是否有能用来训练和加速推理的N卡
-ok_gpu_keywords = {
-    "10",
-    "16",
-    "20",
-    "30",
-    "40",
-    "A2",
-    "A3",
-    "A4",
-    "P4",
-    "A50",
-    "500",
-    "A60",
-    "70",
-    "80",
-    "90",
-    "M4",
-    "T4",
-    "TITAN",
-    "L4",
-    "4060",
-    "H",
-    "600",
-    "506",
-    "507",
-    "508",
-    "509",
-}
-set_gpu_numbers = set()
-if torch.cuda.is_available() or ngpu != 0:
-    for i in range(ngpu):
-        gpu_name = torch.cuda.get_device_name(i)
-        if any(value in gpu_name.upper() for value in ok_gpu_keywords):
-            # A10#A100#V100#A40#P40#M40#K80#A4500
-            if_gpu_ok = True  # 至少有一张能用的N卡
-            gpu_infos.append("%s\t%s" % (i, gpu_name))
-            set_gpu_numbers.add(i)
-            mem.append(int(torch.cuda.get_device_properties(i).total_memory / 1024 / 1024 / 1024 + 0.4))
-# # 判断是否支持mps加速
-# if torch.backends.mps.is_available():
-#     if_gpu_ok = True
-#     gpu_infos.append("%s\t%s" % ("0", "Apple GPU"))
-#     mem.append(psutil.virtual_memory().total/ 1024 / 1024 / 1024) # 实测使用系统内存作为显存不会爆显存
+v3v4set = {"v3", "v4"}
 
 
 def set_default(version):
@@ -126,36 +110,14 @@ def set_default(version):
         default_batch_size_s1, \
         if_force_ckpt
     if_force_ckpt = False
-    if if_gpu_ok and len(gpu_infos) > 0:
-        gpu_info = "\n".join(gpu_infos)
+    gpu_info = "\n".join(gpu_infos)
+    if is_gpu_ok:
         minmem = min(mem)
-        # if version == "v3" and minmem < 14:
-        #     # API读取不到共享显存,直接填充确认
-        #     try:
-        #         torch.zeros((1024,1024,1024,14),dtype=torch.int8,device="cuda")
-        #         torch.cuda.empty_cache()
-        #         minmem = 14
-        #     except RuntimeError as _:
-        #         # 强制梯度检查只需要12G显存
-        #         if minmem >= 12 :
-        #             if_force_ckpt = True
-        #             minmem = 14
-        #         else:
-        #             try:
-        #                 torch.zeros((1024,1024,1024,12),dtype=torch.int8,device="cuda")
-        #                 torch.cuda.empty_cache()
-        #                 if_force_ckpt = True
-        #                 minmem = 14
-        #             except RuntimeError as _:
-        #                 print("显存不足以开启V3训练")
-        default_batch_size = minmem // 2 if version != "v3" else minmem // 8
-        default_batch_size_s1 = minmem // 2
+        default_batch_size = int(minmem // 2 if version not in v3v4set else minmem // 8)
+        default_batch_size_s1 = int(minmem // 2)
     else:
-        gpu_info = "%s\t%s" % ("0", "CPU")
-        gpu_infos.append("%s\t%s" % ("0", "CPU"))
-        set_gpu_numbers.add(0)
         default_batch_size = default_batch_size_s1 = int(psutil.virtual_memory().total / 1024 / 1024 / 1024 / 4)
-    if version != "v3":
+    if version not in v3v4set:
         default_sovits_epoch = 8
         default_sovits_save_every_epoch = 4
         max_sovits_epoch = 25  # 40
@@ -163,16 +125,16 @@ def set_default(version):
     else:
         default_sovits_epoch = 2
         default_sovits_save_every_epoch = 1
-        max_sovits_epoch = 3  # 40
-        max_sovits_save_every_epoch = 3  # 10
+        max_sovits_epoch = 16  # 40 # 3 #训太多=作死
+        max_sovits_save_every_epoch = 10  # 10 # 3
 
     default_batch_size = max(1, default_batch_size)
     default_batch_size_s1 = max(1, default_batch_size_s1)
     default_max_batch_size = default_batch_size * 3
 
 
-gpus = "-".join([i[0] for i in gpu_infos])
-default_gpu_numbers = str(sorted(list(set_gpu_numbers))[0])
+gpus = "-".join(map(str, GPU_INDEX))
+default_gpu_numbers = infer_device.index
 
 
 def fix_gpu_number(input):  # 将越界的number强制改到界内
@@ -255,6 +217,7 @@ process_name_sovits = i18n("SoVITS训练")
 
 
 def open1Ba(
+    version,
     batch_size,
     total_epoch,
     exp_root,
@@ -270,11 +233,16 @@ def open1Ba(
     lora_rank,
     pretrained_s2G,
     pretrained_s2D,
-    version,
 ):
     global p_train_SoVITS
     if p_train_SoVITS == None:
-        with open("GPT_SoVITS/configs/s2.json") as f:
+        exp_name = exp_name.rstrip(" ")
+        config_file = (
+            "GPT_SoVITS/configs/s2.json"
+            if version not in {"v2Pro", "v2ProPlus"}
+            else f"GPT_SoVITS/configs/s2{version}.json"
+        )
+        with open(config_file) as f:
             data = f.read()
             data = json.loads(data)
         s2_dir = "%s/%s" % (exp_root, exp_name)
@@ -303,32 +271,17 @@ def open1Ba(
         tmp_config_path = "%s/tmp_s2.json" % tmp
         with open(tmp_config_path, "w") as f:
             f.write(json.dumps(data))
-        if version in ["v1", "v2"]:
+        if version in ["v1", "v2", "v2Pro", "v2ProPlus"]:
             cmd = '"%s" GPT_SoVITS/s2_train.py --config "%s"' % (python_exec, tmp_config_path)
         else:
             cmd = '"%s" GPT_SoVITS/s2_train_v3_lora.py --config "%s"' % (python_exec, tmp_config_path)
-        # yield (
-        #     process_info(process_name_sovits, "opened"),
-        #     {"__type__": "update", "visible": False},
-        #     {"__type__": "update", "visible": True},
-        # )
         print("SoVITS训练开始：%s" % cmd)
         print(cmd)
-        p_train_SoVITS = Popen(cmd, shell=True)
+        p_train_SoVITS = Popen(cmd, shell=True, env=os.environ)
         p_train_SoVITS.wait()
         p_train_SoVITS = None
-        # yield (
-        #     process_info(process_name_sovits, "finish"),
-        #     {"__type__": "update", "visible": True},
-        #     {"__type__": "update", "visible": False},
-        # )
         print("SoVITS训练完成")
     else:
-        # yield (
-        #     process_info(process_name_sovits, "occupy"),
-        #     {"__type__": "update", "visible": False},
-        #     {"__type__": "update", "visible": True},
-        # )
         print("已有正在进行的SoVITS训练任务，需先终止才能开启下一次任务")
 
 
@@ -337,6 +290,7 @@ process_name_gpt = i18n("GPT训练")
 
 
 def open1Bb(
+    version,
     batch_size,
     total_epoch,
     exp_root,
@@ -349,7 +303,6 @@ def open1Bb(
     save_every_epoch,
     gpu_numbers,
     pretrained_s1,
-    version,
 ):
     global p_train_GPT
     if p_train_GPT == None:
@@ -379,34 +332,19 @@ def open1Bb(
         data["output_dir"] = "%s/logs_s1_%s" % (s1_dir, version)
         # data["version"]=version
 
-        os.environ["_CUDA_VISIBLE_DEVICES"] = fix_gpu_numbers(gpu_numbers.replace("-", ","))
+        os.environ["_CUDA_VISIBLE_DEVICES"] = str(fix_gpu_numbers(gpu_numbers.replace("-", ",")))
         os.environ["hz"] = "25hz"
         tmp_config_path = "%s/tmp_s1.yaml" % tmp
         with open(tmp_config_path, "w") as f:
             f.write(yaml.dump(data, default_flow_style=False))
         # cmd = '"%s" GPT_SoVITS/s1_train.py --config_file "%s" --train_semantic_path "%s/6-name2semantic.tsv" --train_phoneme_path "%s/2-name2text.txt" --output_dir "%s/logs_s1"'%(python_exec,tmp_config_path,s1_dir,s1_dir,s1_dir)
-        cmd = '"%s" GPT_SoVITS/s1_train.py --config_file "%s" ' % (python_exec, tmp_config_path)
-        # yield (
-        #     process_info(process_name_gpt, "opened"),
-        #     {"__type__": "update", "visible": False},
-        #     {"__type__": "update", "visible": True},
-        # )
+        cmd = '"%s" -s GPT_SoVITS/s1_train.py --config_file "%s" ' % (python_exec, tmp_config_path)
         print("GPT训练开始：%s"%cmd)
-        p_train_GPT = Popen(cmd, shell=True)
+        p_train_GPT = Popen(cmd, shell=True, env=os.environ)
         p_train_GPT.wait()
         p_train_GPT = None
-        # yield (
-        #     process_info(process_name_gpt, "finish"),
-        #     {"__type__": "update", "visible": True},
-        #     {"__type__": "update", "visible": False},
-        # )
         print("GPT训练完成")
     else:
-        # yield (
-        #     process_info(process_name_gpt, "occupy"),
-        #     {"__type__": "update", "visible": False},
-        #     {"__type__": "update", "visible": True},
-        # )
         print("已有正在进行的GPT训练任务，需先终止才能开启下一次任务")
 
 
@@ -427,6 +365,7 @@ process_name_1abc = i18n("训练集格式化一键三连")
 
 
 def open1abc(
+    version,
     inp_text,
     inp_wav_dir,
     exp_root,
@@ -435,15 +374,14 @@ def open1abc(
     gpu_numbers1a,
     gpu_numbers1Ba,
     gpu_numbers1c,
+    g2pw_pretrained_dir,
     bert_pretrained_dir,
     ssl_pretrained_dir,
+    sv_path,
     pretrained_s2G_path,
 ):
     global ps1abc
-    # inp_text = my_utils.clean_path(inp_text)
-    # inp_wav_dir = my_utils.clean_path(inp_wav_dir)
-    # if check_for_existance([inp_text, inp_wav_dir], is_dataset_processing=True):
-    #     check_details([inp_text, inp_wav_dir], is_dataset_processing=True)
+    exp_name = exp_name.rstrip(" ")
     if ps1abc == []:
         opt_dir = "%s/%s" % (exp_root, exp_name)
         try:
@@ -458,6 +396,7 @@ def open1abc(
                     "inp_wav_dir": inp_wav_dir,
                     "exp_name": exp_name,
                     "opt_dir": opt_dir,
+                    "g2pw_pretrained_dir": g2pw_pretrained_dir,
                     "bert_pretrained_dir": bert_pretrained_dir,
                     "is_half": str(is_half),
                 }
@@ -468,19 +407,14 @@ def open1abc(
                         {
                             "i_part": str(i_part),
                             "all_parts": str(all_parts),
-                            "_CUDA_VISIBLE_DEVICES": fix_gpu_number(gpu_names[i_part]),
+                            "_CUDA_VISIBLE_DEVICES": str(fix_gpu_number(gpu_names[i_part])),
                         }
                     )
                     os.environ.update(config)
-                    cmd = '"%s" GPT_SoVITS/prepare_datasets_1-get-text.py' % python_exec
+                    cmd = '"%s" -s GPT_SoVITS/prepare_datasets_1-get-text.py' % python_exec
                     print(cmd)
-                    p = Popen(cmd, shell=True)
+                    p = Popen(cmd, shell=True, env=os.environ)
                     ps1abc.append(p)
-                # yield (
-                #     i18n("进度") + ": 1A-Doing",
-                #     {"__type__": "update", "visible": False},
-                #     {"__type__": "update", "visible": True},
-                # )
                 print("进度：1a-ing")
                 for p in ps1abc:
                     p.wait()
@@ -494,11 +428,6 @@ def open1abc(
                 with open(path_text, "w", encoding="utf8") as f:
                     f.write("\n".join(opt) + "\n")
                 assert len("".join(opt)) > 0, process_info(process_name_1a, "failed")
-            # yield (
-            #     i18n("进度") + ": 1A-Done",
-            #     {"__type__": "update", "visible": False},
-            #     {"__type__": "update", "visible": True},
-            # )
             print("进度：1a-done")
             ps1abc = []
             #############################1b
@@ -508,6 +437,7 @@ def open1abc(
                 "exp_name": exp_name,
                 "opt_dir": opt_dir,
                 "cnhubert_base_dir": ssl_pretrained_dir,
+                "sv_path": sv_path,
             }
             gpu_names = gpu_numbers1Ba.split("-")
             all_parts = len(gpu_names)
@@ -516,40 +446,52 @@ def open1abc(
                     {
                         "i_part": str(i_part),
                         "all_parts": str(all_parts),
-                        "_CUDA_VISIBLE_DEVICES": fix_gpu_number(gpu_names[i_part]),
+                        "_CUDA_VISIBLE_DEVICES": str(fix_gpu_number(gpu_names[i_part])),
                     }
                 )
                 os.environ.update(config)
-                cmd = '"%s" GPT_SoVITS/prepare_datasets_2-get-hubert-wav32k.py' % python_exec
+                cmd = '"%s" -s GPT_SoVITS/prepare_datasets_2-get-hubert-wav32k.py' % python_exec
                 print(cmd)
-                p = Popen(cmd, shell=True)
+                p = Popen(cmd, shell=True, env=os.environ)
                 ps1abc.append(p)
-            # yield (
-            #     i18n("进度") + ": 1A-Done, 1B-Doing",
-            #     {"__type__": "update", "visible": False},
-            #     {"__type__": "update", "visible": True},
-            # )
             print("进度：1a-done, 1b-ing")
             for p in ps1abc:
                 p.wait()
-            # yield (
-            #     i18n("进度") + ": 1A-Done, 1B-Done",
-            #     {"__type__": "update", "visible": False},
-            #     {"__type__": "update", "visible": True},
-            # )
-            print("进度：all-done")
             ps1abc = []
+            if "Pro" in version:
+                for i_part in range(all_parts):
+                    config.update(
+                        {
+                            "i_part": str(i_part),
+                            "all_parts": str(all_parts),
+                            "_CUDA_VISIBLE_DEVICES": str(fix_gpu_number(gpu_names[i_part])),
+                        }
+                    )
+                    os.environ.update(config)
+                    cmd = '"%s" -s GPT_SoVITS/prepare_datasets_2-get-sv.py' % python_exec
+                    print(cmd)
+                    p = Popen(cmd, shell=True, env=os.environ)
+                    ps1abc.append(p)
+                for p in ps1abc:
+                    p.wait()
+                ps1abc = []
+            print("进度：1a-done, 1b-done")
             #############################1c
             path_semantic = "%s/6-name2semantic.tsv" % opt_dir
             if os.path.exists(path_semantic) == False or (
                 os.path.exists(path_semantic) == True and os.path.getsize(path_semantic) < 31
             ):
+                config_file = (
+                    "GPT_SoVITS/configs/s2.json"
+                    if version not in {"v2Pro", "v2ProPlus"}
+                    else f"GPT_SoVITS/configs/s2{version}.json"
+                )
                 config = {
                     "inp_text": inp_text,
                     "exp_name": exp_name,
                     "opt_dir": opt_dir,
                     "pretrained_s2G": pretrained_s2G_path,
-                    "s2config_path": "GPT_SoVITS/configs/s2.json",
+                    "s2config_path": config_file,
                 }
                 gpu_names = gpu_numbers1c.split("-")
                 all_parts = len(gpu_names)
@@ -558,19 +500,14 @@ def open1abc(
                         {
                             "i_part": str(i_part),
                             "all_parts": str(all_parts),
-                            "_CUDA_VISIBLE_DEVICES": fix_gpu_number(gpu_names[i_part]),
+                            "_CUDA_VISIBLE_DEVICES": str(fix_gpu_number(gpu_names[i_part])),
                         }
                     )
                     os.environ.update(config)
-                    cmd = '"%s" GPT_SoVITS/prepare_datasets_3-get-semantic.py' % python_exec
+                    cmd = '"%s" -s GPT_SoVITS/prepare_datasets_3-get-semantic.py' % python_exec
                     print(cmd)
-                    p = Popen(cmd, shell=True)
+                    p = Popen(cmd, shell=True, env=os.environ)
                     ps1abc.append(p)
-                # yield (
-                #     i18n("进度") + ": 1A-Done, 1B-Done, 1C-Doing",
-                #     {"__type__": "update", "visible": False},
-                #     {"__type__": "update", "visible": True},
-                # )
                 print("进度：1a1b-done, 1cing")
                 for p in ps1abc:
                     p.wait()
@@ -583,56 +520,32 @@ def open1abc(
                     os.remove(semantic_path)
                 with open(path_semantic, "w", encoding="utf8") as f:
                     f.write("\n".join(opt) + "\n")
-                # yield (
-                #     i18n("进度") + ": 1A-Done, 1B-Done, 1C-Done",
-                #     {"__type__": "update", "visible": False},
-                #     {"__type__": "update", "visible": True},
-                # )
                 print("进度：all-done")
             ps1abc = []
-            # yield (
-            #     process_info(process_name_1abc, "finish"),
-            #     {"__type__": "update", "visible": True},
-            #     {"__type__": "update", "visible": False},
-            # )
-            print("一键三连进程结束")
+            print("finish")
         except:
             traceback.print_exc()
-            # yield (
-            #     process_info(process_name_1abc, "failed"),
-            #     {"__type__": "update", "visible": True},
-            #     {"__type__": "update", "visible": False},
-            # )
-            print("一键三连中途报错")
+            print("failed")
     else:
-        # yield (
-        #     process_info(process_name_1abc, "occupy"),
-        #     {"__type__": "update", "visible": False},
-        #     {"__type__": "update", "visible": True},
-        # )
-        print("已有正在进行的一键三连任务，需先终止才能开启下一次任务")
+        print("occupy")
 
 
 def train(
-    version: str = "v3",
-    fileList_path: str = "GPT-SoVITS/raw/xxx.list",
-    modelDir_bert: str = "GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large",
-    modelDir_hubert: str = "GPT_SoVITS/pretrained_models/chinese-hubert-base",
-    modelPath_gpt: str = "GPT_SoVITS/pretrained_models/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt",
-    modelPath_sovitsG: str = "GPT_SoVITS/pretrained_models/s2G2333k.pth",
-    modelPath_sovitsD: str = "GPT_SoVITS/pretrained_models/s2D2333k.pth",
-    #set_gpt_batchSize: int = default_batch_size_s1,
-    #set_gpt_epochs: int = ,
-    #set_gpt_saveInterval: int = ,
-    #set_sovits_batchSize: int = default_batch_size,
-    #set_sovits_epochs: int = default_sovits_epoch,
-    #set_sovits_saveInterval: int = default_sovits_save_every_epoch,
+    version: str = "v4",
+    fileList_path: str = "",
+    modelPath_gpt: str = "",
+    modelPath_sovitsG: str = "",
+    modelPath_sovitsD: str = "",
+    modelPath_sv: str = "",
+    modelDir_bert: str = "",
+    modelDir_hubert: str = "",
+    modelDir_g2pw: str = "",
     half_precision: bool = False, # 16系卡没有半精度
     if_grad_ckpt: bool = False, # v3是否开启梯度检查点节省显存占用
     lora_rank: int = 32, # Lora秩 choices=[16, 32, 64, 128]
-    output_root: str = "SoVITS_weights&GPT_weights",
-    output_dirName: str = "模型名",
-    output_logDir: str = "logs",
+    output_root: str = "",
+    output_dirName: str = "",
+    output_logDir: str = "",
 ):
     os.makedirs(output_root, exist_ok = True)
     # To absolut audio path & get audio dir
@@ -654,6 +567,7 @@ def train(
     set_default(version)
     # 1A-训练集格式化
     open1abc(
+        version = version,
         inp_text = fileList_path,
         inp_wav_dir = AudioDir,
         exp_root = output_logDir,
@@ -662,12 +576,15 @@ def train(
         gpu_numbers1a = "%s-%s"%(gpus, gpus),
         gpu_numbers1Ba = "%s-%s"%(gpus, gpus),
         gpu_numbers1c = "%s-%s"%(gpus, gpus),
+        g2pw_pretrained_dir = modelDir_g2pw,
         bert_pretrained_dir = modelDir_bert,
         ssl_pretrained_dir = modelDir_hubert,
-        pretrained_s2G_path = modelPath_sovitsG
+        sv_path = modelPath_sv,
+        pretrained_s2G_path = modelPath_sovitsG,
     )
     # 1B-SoVITS训练
     open1Ba(
+        version = version,
         batch_size = default_batch_size,
         total_epoch = default_sovits_epoch,
         exp_root = output_logDir,
@@ -683,10 +600,10 @@ def train(
         lora_rank = int(lora_rank),
         pretrained_s2G = modelPath_sovitsG,
         pretrained_s2D = modelPath_sovitsD,
-        version = version
     )
     # 1B-GPT训练
     open1Bb(
+        version = version,
         batch_size = default_batch_size_s1,
         total_epoch = 15,
         exp_root = output_logDir,
@@ -699,23 +616,10 @@ def train(
         save_every_epoch = 5,
         gpu_numbers = "%s" % (gpus),
         pretrained_s1 = modelPath_gpt,
-        version = version
     )
 
 
 if __name__ == '__main__':
     train(
-        'v2',
-        'd:/Projekt/Git/Python Projects/EVT - test/数据集制作结果/GPT-SoVITS/4/Train_2025-04-06.txt',
-        'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/chinese-roberta-wwm-ext-large',
-        'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/chinese-hubert-base',
-        'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/s1&s2/s1bert25hz-5kh-longer-epoch=12-step=369668.ckpt',
-        'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/s1&s2/s2G2333k.pth',
-        'd:/Projekt/Git/Python Projects/EVT - test/Models/TTS/GPT-SoVITS/Downloaded/s1&s2/s2D2333k.pth',
-        half_precision = True,
-        if_grad_ckpt = False,
-        lora_rank = '32',
-        output_root = 'd:/Projekt/Git/Python Projects/EVT - test/模型训练结果/GPT-SoVITS',
-        output_dirName = '4',
-        output_logDir = '/EVT_TrainLog/GPT-SoVITS/2025-04-06'
+        ...
     )

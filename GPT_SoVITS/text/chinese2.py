@@ -28,12 +28,11 @@ import jieba_fast.posseg as psg
 is_g2pw = True  # True if is_g2pw_str.lower() == 'true' else False
 if is_g2pw:
     # print("当前使用g2pw进行拼音推理")
-    from text.g2pw import G2PWPinyin, correct_pronunciation
-
-    parent_directory = os.path.dirname(current_file_path)
+    from text.g2pw import correct_pronunciation
+    from text.g2pw import G2PWPinyin
     g2pw = G2PWPinyin(
-        model_dir="GPT_SoVITS/text/G2PWModel",
-        model_source=os.environ.get("bert_path") or os.environ.get("bert_pretrained_dir") or "GPT_SoVITS/pretrained_models/chinese-roberta-wwm-ext-large",
+        model_dir=os.environ.get("g2pw_path") or os.environ.get("g2pw_pretrained_dir"),
+        model_source=os.environ.get("bert_path") or os.environ.get("bert_pretrained_dir"),
         v_to_u=False,
         neutral_tone_with_five=True,
     )
@@ -320,20 +319,6 @@ def text_normalize(text):
     dest_text = ""
     for sentence in sentences:
         dest_text += replace_punctuation(sentence)
-
-    # 避免重复标点引起的参考泄露
-    dest_text = replace_consecutive_punctuation(dest_text)
-    return dest_text
-
-
-# 不排除英文的文本格式化
-def mix_text_normalize(text):
-    # https://github.com/PaddlePaddle/PaddleSpeech/tree/develop/paddlespeech/t2s/frontend/zh_normalization
-    tx = TextNormalizer()
-    sentences = tx.normalize(text)
-    dest_text = ""
-    for sentence in sentences:
-        dest_text += replace_punctuation_with_en(sentence)
 
     # 避免重复标点引起的参考泄露
     dest_text = replace_consecutive_punctuation(dest_text)

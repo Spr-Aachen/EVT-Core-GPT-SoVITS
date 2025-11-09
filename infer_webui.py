@@ -4,24 +4,17 @@ Altered from webui.py
 
 import os
 import sys
-
-# if len(sys.argv) == 1:
-#     sys.argv.append("v2")
-# version = "v1" if sys.argv[1] == "v1" else "v2"
-# os.environ["version"] = version
-
+#os.environ["version"] = version = "v2Pro"
 from pathlib import Path
 now_dir = Path(__file__).absolute().parent.as_posix()
 gptsovits_dir = Path(now_dir).joinpath("GPT_SoVITS").as_posix()
 sys.path.insert(0, f"{gptsovits_dir}")
 sys.path.insert(1, f"{now_dir}")
 os.chdir(now_dir)
-
 import warnings
 warnings.filterwarnings("ignore")
 import json
 import platform
-import re
 import shutil
 import signal
 import psutil
@@ -43,76 +36,67 @@ if os.path.exists(tmp):
         except Exception as e:
             print(str(e))
             pass
+import site
 import traceback
+site_packages_roots = []
+for path in site.getsitepackages():
+    if "packages" in path:
+        site_packages_roots.append(path)
+if site_packages_roots == []:
+    site_packages_roots = ["%s/runtime/Lib/site-packages" % now_dir]
+# os.environ["OPENBLAS_NUM_THREADS"] = "4"
+os.environ["no_proxy"] = "localhost, 127.0.0.1, ::1"
+os.environ["all_proxy"] = ""
+for site_packages_root in site_packages_roots:
+    if os.path.exists(site_packages_root):
+        try:
+            with open("%s/users.pth" % (site_packages_root), "w") as f:
+                f.write(
+                    # "%s\n%s/runtime\n%s/tools\n%s/tools/asr\n%s/GPT_SoVITS\n%s/tools/uvr5"
+                    "%s\n%s/GPT_SoVITS/BigVGAN\n%s/tools\n%s/tools/asr\n%s/GPT_SoVITS\n%s/tools/uvr5"
+                    % (now_dir, now_dir, now_dir, now_dir, now_dir, now_dir)
+                )
+            break
+        except PermissionError:
+            traceback.print_exc()
+import shutil
 import subprocess
 from subprocess import Popen
-from config import (
-    exp_root,
-    infer_device,
-    is_half,
-    is_share,
-    python_exec,
-    webui_port_infer_tts,
-)
-#from GPT_SoVITS.tools import my_utils
+
 from GPT_SoVITS.tools.i18n.i18n import I18nAuto, scan_language_list
+
 language = sys.argv[-1] if sys.argv[-1] in scan_language_list() else "Auto"
 os.environ["language"] = language
 i18n = I18nAuto(language=language)
 from multiprocessing import cpu_count
 
+from config import (
+    GPU_INDEX,
+    GPU_INFOS,
+    IS_GPU,
+    exp_root,
+    infer_device,
+    is_half,
+    is_share,
+    memset,
+    python_exec,
+    webui_port_infer_tts,
+    webui_port_main,
+    webui_port_subfix,
+    webui_port_uvr5,
+)
+
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 n_cpu = cpu_count()
 
-ngpu = torch.cuda.device_count()
-gpu_infos = []
-mem = []
-if_gpu_ok = False
+set_gpu_numbers = GPU_INDEX
+gpu_infos = GPU_INFOS
+mem = memset
+is_gpu_ok = IS_GPU
 
-# 判断是否有能用来训练和加速推理的N卡
-ok_gpu_keywords = {
-    "10",
-    "16",
-    "20",
-    "30",
-    "40",
-    "A2",
-    "A3",
-    "A4",
-    "P4",
-    "A50",
-    "500",
-    "A60",
-    "70",
-    "80",
-    "90",
-    "M4",
-    "T4",
-    "TITAN",
-    "L4",
-    "4060",
-    "H",
-    "600",
-    "506",
-    "507",
-    "508",
-    "509",
-}
-set_gpu_numbers = set()
-if torch.cuda.is_available() or ngpu != 0:
-    for i in range(ngpu):
-        gpu_name = torch.cuda.get_device_name(i)
-        if any(value in gpu_name.upper() for value in ok_gpu_keywords):
-            # A10#A100#V100#A40#P40#M40#K80#A4500
-            if_gpu_ok = True  # 至少有一张能用的N卡
-            gpu_infos.append("%s\t%s" % (i, gpu_name))
-            set_gpu_numbers.add(i)
-            mem.append(int(torch.cuda.get_device_properties(i).total_memory / 1024 / 1024 / 1024 + 0.4))
-# # 判断是否支持mps加速
-# if torch.backends.mps.is_available():
-#     if_gpu_ok = True
-#     gpu_infos.append("%s\t%s" % ("0", "Apple GPU"))
-#     mem.append(psutil.virtual_memory().total/ 1024 / 1024 / 1024) # 实测使用系统内存作为显存不会爆显存
+v3v4set = {"v3", "v4"}
 
 
 def set_default(version):
@@ -127,36 +111,14 @@ def set_default(version):
         default_batch_size_s1, \
         if_force_ckpt
     if_force_ckpt = False
-    if if_gpu_ok and len(gpu_infos) > 0:
-        gpu_info = "\n".join(gpu_infos)
+    gpu_info = "\n".join(gpu_infos)
+    if is_gpu_ok:
         minmem = min(mem)
-        # if version == "v3" and minmem < 14:
-        #     # API读取不到共享显存,直接填充确认
-        #     try:
-        #         torch.zeros((1024,1024,1024,14),dtype=torch.int8,device="cuda")
-        #         torch.cuda.empty_cache()
-        #         minmem = 14
-        #     except RuntimeError as _:
-        #         # 强制梯度检查只需要12G显存
-        #         if minmem >= 12 :
-        #             if_force_ckpt = True
-        #             minmem = 14
-        #         else:
-        #             try:
-        #                 torch.zeros((1024,1024,1024,12),dtype=torch.int8,device="cuda")
-        #                 torch.cuda.empty_cache()
-        #                 if_force_ckpt = True
-        #                 minmem = 14
-        #             except RuntimeError as _:
-        #                 print("显存不足以开启V3训练")
-        default_batch_size = minmem // 2 if version != "v3" else minmem // 8
+        default_batch_size = minmem // 2 if version not in v3v4set else minmem // 8
         default_batch_size_s1 = minmem // 2
     else:
-        gpu_info = "%s\t%s" % ("0", "CPU")
-        gpu_infos.append("%s\t%s" % ("0", "CPU"))
-        set_gpu_numbers.add(0)
         default_batch_size = default_batch_size_s1 = int(psutil.virtual_memory().total / 1024 / 1024 / 1024 / 4)
-    if version != "v3":
+    if version not in v3v4set:
         default_sovits_epoch = 8
         default_sovits_save_every_epoch = 4
         max_sovits_epoch = 25  # 40
@@ -164,16 +126,16 @@ def set_default(version):
     else:
         default_sovits_epoch = 2
         default_sovits_save_every_epoch = 1
-        max_sovits_epoch = 3  # 40
-        max_sovits_save_every_epoch = 3  # 10
+        max_sovits_epoch = 16  # 40 # 3 #训太多=作死
+        max_sovits_save_every_epoch = 10  # 10 # 3
 
     default_batch_size = max(1, default_batch_size)
     default_batch_size_s1 = max(1, default_batch_size_s1)
     default_max_batch_size = default_batch_size * 3
 
 
-gpus = "-".join([i[0] for i in gpu_infos])
-default_gpu_numbers = str(sorted(list(set_gpu_numbers))[0])
+gpus = "-".join(map(str, GPU_INDEX))
+default_gpu_numbers = infer_device.index
 
 
 def fix_gpu_number(input):  # 将越界的number强制改到界内
@@ -287,57 +249,59 @@ def change_tts_inference(
     gpt_path,
     sovits_path,
     sovits_v3_path,
+    sovits_v4_path,
     bigvgan_path,
+    vocoder_path,
+    sv_path,
+    g2pw_path,
     is_half,
     batched_infer_enabled
 ):
     global p_tts_inference
     if batched_infer_enabled:
-        cmd = '"%s" GPT_SoVITS/inference_webui_fast.py "%s"' % (python_exec, language)
+        cmd = '"%s" -s GPT_SoVITS/inference_webui_fast.py "%s"' % (python_exec, language)
     else:
-        cmd = '"%s" GPT_SoVITS/inference_webui.py "%s"' % (python_exec, language)
+        cmd = '"%s" -s GPT_SoVITS/inference_webui.py "%s"' % (python_exec, language)
     # #####v3暂不支持加速推理
     # if version=="v3":
     #     cmd = '"%s" GPT_SoVITS/inference_webui.py "%s"'%(python_exec, language)
     if p_tts_inference is None:
-        os.environ["gpt_path"] = gpt_path# if "/" in gpt_path else "%s/%s" % (GPT_weight_root, gpt_path)
-        os.environ["sovits_path"] = sovits_path# if "/" in sovits_path else "%s/%s" % (SoVITS_weight_root, sovits_path)
+        os.environ["gpt_path"] = gpt_path
+        os.environ["sovits_path"] = sovits_path
         os.environ["sovits_v3_path"] = sovits_v3_path
+        os.environ["sovits_v4_path"] = sovits_v4_path
         os.environ["cnhubert_base_path"] = cnhubert_base_path
         os.environ["bert_path"] = bert_path
         os.environ["bigvgan_path"] = bigvgan_path
-        os.environ["_CUDA_VISIBLE_DEVICES"] = fix_gpu_number(gpu_number)
+        os.environ["vocoder_path"] = vocoder_path
+        os.environ["sv_path"] = sv_path
+        os.environ["g2pw_path"] = g2pw_path
+        os.environ["_CUDA_VISIBLE_DEVICES"] = str(fix_gpu_number(gpu_number))
         os.environ["is_half"] = str(is_half)
         os.environ["infer_ttswebui"] = str(webui_port_infer_tts)
         os.environ["is_share"] = str(is_share)
-        # yield (
-        #     process_info(process_name_tts, "opened"),
-        #     {"__type__": "update", "visible": False},
-        #     {"__type__": "update", "visible": True},
-        # )
         print("TTS推理进程已开启")
         print(cmd)
-        p_tts_inference = Popen(cmd, shell=True)
+        p_tts_inference = Popen(cmd, shell=True, env=os.environ)
         p_tts_inference.wait()
     else:
         kill_process(p_tts_inference.pid, process_name_tts)
         p_tts_inference = None
-        # yield (
-        #     process_info(process_name_tts, "closed"),
-        #     {"__type__": "update", "visible": True},
-        #     {"__type__": "update", "visible": False},
-        # )
         print("TTS推理进程已关闭")
 
 
 def infer(
-    version: str = "v3",
-    sovits_path: str = ...,
-    sovits_v3_path: str = ...,
-    gpt_path: str = ...,
-    cnhubert_base_path: str = ...,
-    bert_path: str = ...,
-    bigvgan_path: str = ...,
+    version: str = "v4",
+    sovits_path: str = "",
+    sovits_v3_path: str = "",
+    sovits_v4_path: str = "",
+    gpt_path: str = "",
+    cnhubert_base_path: str = "",
+    bert_path: str = "",
+    bigvgan_path: str = "",
+    vocoder_path: str = "",
+    sv_path: str = "",
+    g2pw_path: str = "",
     half_precision: bool = True,
     batched_infer: bool = False,
 ):
@@ -351,7 +315,11 @@ def infer(
         gpt_path = gpt_path,
         sovits_path = sovits_path,
         sovits_v3_path = sovits_v3_path,
+        sovits_v4_path = sovits_v4_path,
         bigvgan_path = bigvgan_path,
+        vocoder_path = vocoder_path,
+        sv_path = sv_path,
+        g2pw_path = g2pw_path,
         is_half = half_precision,
         batched_infer_enabled = batched_infer,
     )

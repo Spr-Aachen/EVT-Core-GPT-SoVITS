@@ -27,12 +27,10 @@ from random import randint
 from module import commons
 from module.data_utils import (
     DistributedBucketSampler,
-)
-from module.data_utils import (
-    TextAudioSpeakerCollateV3 as TextAudioSpeakerCollate,
-)
-from module.data_utils import (
-    TextAudioSpeakerLoaderV3 as TextAudioSpeakerLoader,
+    TextAudioSpeakerCollateV3,
+    TextAudioSpeakerLoaderV3,
+    TextAudioSpeakerCollateV4,
+    TextAudioSpeakerLoaderV4,
 )
 from module.models import (
     SynthesizerTrnV3 as SynthesizerTrn,
@@ -89,6 +87,8 @@ def run(rank, n_gpus, hps):
     if torch.cuda.is_available():
         torch.cuda.set_device(rank)
 
+    TextAudioSpeakerLoader = TextAudioSpeakerLoaderV3 if hps.model.version == "v3" else TextAudioSpeakerLoaderV4
+    TextAudioSpeakerCollate = TextAudioSpeakerCollateV3 if hps.model.version == "v3" else TextAudioSpeakerCollateV4
     train_dataset = TextAudioSpeakerLoader(hps.data)  ########
     train_sampler = DistributedBucketSampler(
         train_dataset,
@@ -189,7 +189,7 @@ def run(rank, n_gpus, hps):
             print(
                 "loaded pretrained %s" % hps.train.pretrained_s2G,
                 net_g.load_state_dict(
-                    torch.load(hps.train.pretrained_s2G, map_location="cpu")["weight"],
+                    torch.load(hps.train.pretrained_s2G, map_location="cpu", weights_only=False)["weight"],
                     strict=False,
                 ),
             )
@@ -365,6 +365,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
                         epoch,
                         global_step,
                         hps,
+                        model_version=hps.model.version,
                         lora_rank=lora_rank,
                     ),
                 )
